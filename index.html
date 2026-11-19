@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>💕</title>
+  <!-- All the words live in config.js. Edit that file, not this one. -->
+  <script src="config.js"></script>
+  <style>
+    :root { --pink: #ff5d8f; --ink: #3a2030; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(160deg, #ffd6e3 0%, #ffeef3 55%, #fff6e9 100%);
+      display: flex; justify-content: center; padding: 24px 16px; overflow-x: hidden;
+    }
+    .app { width: 100%; max-width: 520px; text-align: center; }
+    h1 { font-size: 1.8rem; margin: .2em 0; }
+    .subtitle { margin: 0 0 18px; opacity: .8; }
+
+    .face { font-size: 96px; line-height: 1; display: inline-block; }
+    .bump { animation: bump .45s; }
+    @keyframes bump { 50% { transform: scale(1.25) rotate(-8deg); } }
+    .mood-label { font-weight: 700; margin: 8px 0 8px; }
+
+    .meter { height: 18px; background: #fff; border-radius: 999px; overflow: hidden;
+             box-shadow: inset 0 1px 3px rgba(0,0,0,.15); }
+    .meter-fill { height: 100%; width: 100%; transition: width .5s ease;
+                  background: linear-gradient(90deg, #ffb03c, #ff3b3b); }
+    .meter-text { font-size: .85rem; margin-top: 4px; opacity: .7; }
+
+    .message { background: #fff; border-radius: 18px; padding: 18px; margin: 20px 0;
+               min-height: 86px; font-size: 1.1rem; display: flex; align-items: center;
+               justify-content: center; box-shadow: 0 6px 20px rgba(255,93,143,.18); }
+    .pop { animation: pop .35s; }
+    @keyframes pop { from { transform: scale(.92); opacity: .3; } }
+
+    button { font: inherit; color: inherit; border: none; cursor: pointer; border-radius: 14px; }
+    .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .action { background: #fff; padding: 14px 10px; box-shadow: 0 3px 10px rgba(0,0,0,.08);
+              transition: transform .1s; }
+    .action:hover { transform: translateY(-2px); }
+    .action:active { transform: scale(.96); }
+    .action .icon { display: block; font-size: 1.7rem; margin-bottom: 4px; }
+
+    .float { position: fixed; pointer-events: none; font-size: 26px; z-index: 5;
+             animation: floatUp 1.2s ease-out both; }
+    @keyframes floatUp {
+      from { transform: translate(-50%, -50%); opacity: 1; }
+      to   { transform: translate(calc(-50% + var(--dx)), calc(-50% - 170px)); opacity: 0; }
+    }
+
+    .overlay { position: fixed; inset: 0; z-index: 10; padding: 16px;
+               background: rgba(255, 214, 227, .9); display: flex;
+               align-items: center; justify-content: center; }
+    .card { background: #fff; border-radius: 24px; padding: 28px 24px; width: 100%;
+            max-width: 420px; text-align: center; box-shadow: 0 10px 40px rgba(255,93,143,.3);
+            animation: pop .4s; }
+    .big-face { font-size: 80px; line-height: 1; }
+    .card h2 { margin: 12px 0 20px; }
+    .choice { display: flex; gap: 16px; justify-content: center; align-items: center; min-height: 70px; }
+    .yes { background: var(--pink); color: #fff; padding: 12px 30px; font-size: 1.15rem;
+           font-weight: 700; transition: transform .2s; }
+    .no { background: #eee; padding: 10px 22px; }
+    .runaway { position: fixed; z-index: 20; transition: left .15s, top .15s; white-space: nowrap; }
+    .restart { background: var(--pink); color: #fff; padding: 10px 24px; margin-top: 8px; }
+
+    .rain { position: fixed; top: -60px; pointer-events: none; z-index: 30;
+            animation-name: fall; animation-timing-function: linear; animation-fill-mode: both; }
+    @keyframes fall { to { transform: translateY(115vh) rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1 id="title"></h1>
+    <p class="subtitle" id="subtitle"></p>
+    <div class="face" id="face"></div>
+    <div class="mood-label" id="moodLabel"></div>
+    <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+    <div class="meter-text" id="meterText"></div>
+    <div class="message" id="message"></div>
+    <div class="actions" id="actions"></div>
+  </main>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="card" id="askCard">
+      <div class="big-face">🥺</div>
+      <h2 id="finalQuestion"></h2>
+      <div class="choice" id="choice">
+        <button class="yes" id="yes"></button>
+        <button class="no" id="no"></button>
+      </div>
+    </div>
+    <div class="card" id="doneCard" hidden>
+      <div class="big-face">🥰</div>
+      <h2 id="celebrationTitle"></h2>
+      <p id="celebrationMessage"></p>
+      <button class="restart" id="restart"></button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const C = window.CONFIG;
+    if (!C) {
+      document.body.textContent = "Could not read config.js. Look for a missing comma or quote in it.";
+      return;
+    }
+
+    const $ = (id) => document.getElementById(id);
+    const fill = (s) => String(s ?? "").replaceAll("{her}", C.herName).replaceAll("{you}", C.yourName);
+    const setText = (id, s) => { $(id).textContent = fill(s); };
+    const replay = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+
+    let anger = 100, yesScale = 1, noTries = 0, finished = false;
+    const decks = new Map(); // each button's shuffled messages, so none repeat too soon
+
+    // ---- fill in the text from config ----
+    document.title = fill(C.pageTitle);
+    setText("title", C.title);
+    setText("subtitle", C.subtitle);
+    setText("finalQuestion", C.finalQuestion);
+    setText("yes", C.yesButton);
+    setText("no", C.noButton);
+    setText("celebrationTitle", C.celebrationTitle);
+    setText("celebrationMessage", C.celebrationMessage);
+    setText("restart", C.startOver);
+
+    C.actions.forEach((a) => {
+      const b = document.createElement("button");
+      b.className = "action";
+      const icon = document.createElement("span");
+      icon.className = "icon";
+      icon.textContent = a.icon;
+      b.append(icon, fill(a.label));
+      b.addEventListener("click", () => doAction(a, b));
+      $("actions").append(b);
+    });
+
+    // ---- main loop ----
+    function doAction(a, btn) {
+      if (finished) return;
+      showMessage(nextMessage(a));
+      anger = Math.max(0, anger - (Number(a.points) || 0));
+      render(true);
+      burst(btn, a.icon);
+      if (anger === 0) { finished = true; setTimeout(openAsk, 1200); }
+    }
+
+    function nextMessage(a) {
+      let deck = decks.get(a);
+      if (!deck || deck.length === 0) { deck = shuffle([...a.messages]); decks.set(a, deck); }
+      return deck.pop();
+    }
+
+    function shuffle(list) {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      return list;
+    }
+
+    function showMessage(s) {
+      $("message").textContent = fill(s);
+      replay($("message"), "pop");
+    }
+
+    function render(bump) {
+      const mood = C.moods.find((m) => anger >= m.angerAtLeast) || C.moods[C.moods.length - 1];
+      $("face").textContent = mood.face;
+      if (bump) replay($("face"), "bump");
+      setText("moodLabel", mood.label);
+      $("meterFill").style.width = anger + "%";
+      $("meterText").textContent = fill(C.meterLabel) + ": " + anger + "%";
+    }
+
+    function burst(el, icon) {
+      const r = el.getBoundingClientRect();
+      [icon, "💖", "💕", icon, "✨", "💗"].forEach((e, i) => {
+        const s = document.createElement("span");
+        s.className = "float";
+        s.textContent = e;
+        s.style.left = r.left + r.width / 2 + "px";
+        s.style.top = r.top + r.height / 2 + "px";
+        s.style.setProperty("--dx", Math.random() * 160 - 80 + "px");
+        s.style.animationDelay = i * 50 + "ms";
+        document.body.append(s);
+        setTimeout(() => s.remove(), 1600);
+      });
+    }
+
+    // ---- the final question ----
+    function openAsk() {
+      $("overlay").hidden = false;
+      $("askCard").hidden = false;
+      $("doneCard").hidden = true;
+    }
+
+    function dodge(e) {
+      if (e) e.preventDefault();
+      const no = $("no");
+      const texts = C.noButtonTexts && C.noButtonTexts.length ? C.noButtonTexts : [C.noButton];
+      no.textContent = fill(texts[noTries % texts.length]);
+      noTries++;
+      if (!no.classList.contains("runaway")) {
+        const r = no.getBoundingClientRect();
+        document.body.append(no); // leave the card so it can go anywhere on screen
+        no.classList.add("runaway");
+        no.style.left = r.left + "px";
+        no.style.top = r.top + "px";
+        void no.offsetWidth;
+      }
+      const maxX = window.innerWidth - no.offsetWidth - 10;
+      const maxY = window.innerHeight - no.offsetHeight - 10;
+      no.style.left = Math.max(10, Math.random() * maxX) + "px";
+      no.style.top = Math.max(10, Math.random() * maxY) + "px";
+      yesScale = Math.min(yesScale + 0.15, 2.4);
+      $("yes").style.transform = "scale(" + yesScale + ")";
+    }
+    $("no").addEventListener("mouseenter", dodge);
+    $("no").addEventListener("touchstart", dodge, { passive: false });
+    $("no").addEventListener("click", dodge);
+
+    $("yes").addEventListener("click", () => {
+      $("askCard").hidden = true;
+      $("doneCard").hidden = false;
+      $("no").hidden = true;
+      rain();
+    });
+
+    function rain() {
+      const list = C.celebrationEmoji && C.celebrationEmoji.length ? C.celebrationEmoji : ["💖"];
+      for (let i = 0; i < 60; i++) {
+        const s = document.createElement("span");
+        s.className = "rain";
+        s.textContent = list[i % list.length];
+        s.style.left = Math.random() * 100 + "vw";
+        s.style.fontSize = 18 + Math.random() * 24 + "px";
+        s.style.animationDuration = 2.5 + Math.random() * 2.5 + "s";
+        s.style.animationDelay = Math.random() * 2 + "s";
+        document.body.append(s);
+        setTimeout(() => s.remove(), 7500);
+      }
+    }
+
+    // ---- start over ----
+    function reset() {
+      anger = 100; yesScale = 1; noTries = 0; finished = false;
+      decks.clear();
+      const no = $("no");
+      no.hidden = false;
+      no.classList.remove("runaway");
+      no.removeAttribute("style");
+      setText("no", C.noButton);
+      $("choice").append(no);
+      $("yes").style.transform = "";
+      $("overlay").hidden = true;
+      showMessage(C.intro);
+      render(false);
+    }
+    $("restart").addEventListener("click", reset);
+
+    reset();
+  })();
+  </script>
+</body>
+</html>
